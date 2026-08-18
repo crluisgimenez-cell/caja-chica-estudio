@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caja Chica Estudio</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+
+  /* ── Modal usuario ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal {
+    background: white; border-radius: 16px; padding: 32px; width: 360px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
+  }
+  .modal h2 { font-size: 1.2rem; margin-bottom: 8px; color: #2d3748; }
+  .modal p  { font-size: 0.85rem; color: #718096; margin-bottom: 20px; }
+  .modal input {
+    width: 100%; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px;
+    font-size: 0.95rem; margin-bottom: 14px; background: #f7fafc;
+  }
+  .modal input:focus { outline: none; border-color: #4a6fa5; background: white; }
+  .modal button {
+    width: 100%; padding: 11px; background: #4a6fa5; color: white;
+    border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  }
+  .modal button:hover { background: #3a5a8f; }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #4a6fa5, #3a5a8f);
+    color: white; padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(255,255,255,0.15); border-radius: 20px; padding: 5px 12px;
+    font-size: 0.82rem; cursor: pointer; transition: background 0.15s;
+  }
+  .user-chip:hover { background: rgba(255,255,255,0.25); }
+  .sync-status {
+    font-size: 0.78rem; padding: 4px 10px; border-radius: 20px;
+    background: rgba(255,255,255,0.15);
+  }
+  .sync-status.ok    { background: rgba(72,187,120,0.35); }
+  .sync-status.error { background: rgba(245,101,101,0.35); }
+
+  /* ── Container ── */
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; background: white;
+    border-radius: 10px; padding: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); width: fit-content; }
+  .tab {
+    padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 0.88rem;
+    font-weight: 600; color: #718096; transition: all 0.15s;
+  }
+  .tab.active { background: #4a6fa5; color: white; }
+
+  /* ── Balances (2 columnas) ── */
+  .balances { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .balance-group {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .balance-group h3 {
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #718096; margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 2px solid #edf2f7;
+  }
+  .balance-group h3.caja   { border-color: #4a6fa5; }
+  .balance-group h3.timbres{ border-color: #805ad5; }
+  .bg-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+  .mini-card { text-align: center; padding: 12px 8px; border-radius: 8px; background: #f7fafc; }
+  .mini-card .lbl { font-size: 0.7rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; }
+  .mini-card .val { font-size: 1.05rem; font-weight: 700; margin-top: 4px; }
+  .val.balance-caja    { color: #4a6fa5; }
+  .val.balance-timbres { color: #805ad5; }
+  .val.income  { color: #38a169; }
+  .val.expense { color: #e53e3e; }
+
+  /* ── Filtro mes ── */
+  .month-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .month-bar label { font-weight: 600; color: #4a5568; font-size: 0.9rem; }
+  .month-bar input[type="month"] {
+    padding: 7px 12px; border: 1px solid #cbd5e0; border-radius: 8px;
+    font-size: 0.9rem; background: white;
+  }
+  .btn-all {
+    padding: 7px 14px; border: 1px solid #cbd5e0; border-radius: 8px;
+    background: white; cursor: pointer; font-size: 0.82rem; color: #4a5568;
+  }
+  .btn-all.active { background: #4a6fa5; color: white; border-color: #4a6fa5; }
+
+  /* ── Layout principal ── */
+  .main { display: grid; grid-template-columns: 400px 1fr; gap: 20px; }
+
+  /* ── Formulario ── */
+  .form-card {
+    background: white; border-radius: 12px; padding: 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); height: fit-content;
+  }
+  .form-card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 18px; }
+  .type-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .type-btn {
+    flex: 1; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px;
+    cursor: pointer; font-size: 0.9rem; font-weight: 600; background: white;
+    transition: all 0.15s; text-align: center; color: #a0aec0;
+  }
+  .type-btn.income.active  { background: #f0fff4; border-color: #38a169; color: #38a169; }
+  .type-btn.expense.active { background: #fff5f5; border-color: #e53e3e; color: #e53e3e; }
+
+  .form-group { margin-bottom: 13px; }
+  .form-group label {
+    display: block; font-size: 0.78rem; font-weight: 600;
+    color: #4a5568; margin-bottom: 4px;
+  }
+  .form-group label .req { color: #e53e3e; margin-left: 2px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+    font-size: 0.88rem; background: #f7fafc; transition: border-color 0.15s;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none; border-color: #4a6fa5; background: white;
+  }
+  .source-toggle { display: flex; gap: 8px; }
+  .source-btn {
+    flex: 1; padding: 8px; border: 2px solid #e2e8f0; border-radius: 8px;
+    cursor: pointer; font-size: 0.82rem; font-weight: 600; background: white;
+    transition: all 0.15s; text-align: center; color: #a0aec0;
+  }
+  .source-btn.caja.active    { background: #ebf4ff; border-color: #4a6fa5; color: #4a6fa5; }
+  .source-btn.timbres.active { background: #faf5ff; border-color: #805ad5; color: #805ad5; }
+  .source-btn.antel.active   { background: #fffaf0; border-color: #dd6b20; color: #dd6b20; }
+
+  .btn-submit {
+    width: 100%; padding: 11px; background: #4a6fa5; color: white; border: none;
+    border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    transition: background 0.15s; margin-top: 4px;
+  }
+  .btn-submit:hover { background: #3a5a8f; }
+  .btn-submit:disabled { background: #a0aec0; cursor: not-allowed; }
+
+  /* ── Lista ── */
+  .list-card { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+  .list-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; gap: 8px;
+  }
+  .list-header h2 { font-size: 1rem; font-weight: 600; }
+  .filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 4px 11px; border: 1px solid #e2e8f0; border-radius: 20px;
+    background: white; cursor: pointer; font-size: 0.78rem; color: #4a5568;
+  }
+  .filter-btn.active { background: #4a6fa5; color: white; border-color: #4a6fa5; }
+
+  .tx-list { max-height: 480px; overflow-y: auto; }
+  .tx-item {
+    display: flex; align-items: flex-start; padding: 12px 20px;
+    border-bottom: 1px solid #f7fafc; gap: 12px; transition: background 0.1s;
+  }
+  .tx-item:hover { background: #f7fafc; }
+  .tx-icon {
+    width: 38px; height: 38px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; flex-shrink: 0; margin-top: 2px;
+  }
+  .tx-icon.income  { background: #f0fff4; }
+  .tx-icon.expense { background: #fff5f5; }
+  .tx-info { flex: 1; min-width: 0; }
+  .tx-desc { font-size: 0.88rem; font-weight: 600; }
+  .tx-meta { font-size: 0.72rem; color: #a0aec0; margin-top: 3px; line-height: 1.5; }
+  .tx-meta .cliente { color: #4a6fa5; font-weight: 600; }
+  .tx-meta .source-tag {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 0.68rem; font-weight: 600; margin-left: 4px;
+  }
+  .source-tag.caja    { background: #ebf4ff; color: #4a6fa5; }
+  .source-tag.timbres { background: #faf5ff; color: #805ad5; }
+  .source-tag.antel   { background: #fffaf0; color: #dd6b20; }
+  .tx-right { text-align: right; flex-shrink: 0; }
+  .tx-amount { font-size: 0.95rem; font-weight: 700; }
+  .tx-amount.income  { color: #38a169; }
+  .tx-amount.expense { color: #e53e3e; }
+  .tx-user { font-size: 0.68rem; color: #a0aec0; margin-top: 2px; }
+  .tx-action {
+    opacity: 0; background: none; border: none; cursor: pointer;
+    font-size: 0.85rem; padding: 4px 5px; align-self: center; border-radius: 6px;
+    transition: all 0.15s; color: #a0aec0;
+  }
+  .tx-item:hover .tx-action { opacity: 1; }
+  .tx-edit:hover  { background: #ebf4ff; color: #4a6fa5; }
+  .tx-delete:hover { background: #fff5f5; color: #e53e3e; }
+
+  .empty-state { text-align: center; padding: 48px 24px; color: #a0aec0; }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+  /* ── Reporte ── */
+  .report-section { }
+  .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+  .report-header h2 { font-size: 1rem; font-weight: 600; }
+  .btn-export {
+    padding: 8px 16px; background: #38a169; color: white; border: none;
+    border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-export:hover { background: #2f855a; }
+  .report-table-wrap { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 11px 16px; background: #f7fafc; text-align: left;
+    font-size: 0.78rem; font-weight: 700; color: #4a5568;
+    text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #e2e8f0;
+  }
+  tbody td { padding: 10px 16px; font-size: 0.85rem; border-bottom: 1px solid #f7fafc; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: #f7fafc; }
+  .td-amount { font-weight: 700; color: #e53e3e; text-align: right; }
+  .td-count  { color: #718096; text-align: center; }
+  tfoot td { padding: 10px 16px; font-size: 0.85rem; font-weight: 700; background: #f7fafc; border-top: 2px solid #e2e8f0; }
+  .no-report { text-align: center; padding: 40px; color: #a0aec0; font-size: 0.88rem; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .balances { grid-template-columns: 1fr; }
+    .bg-cards { grid-template-columns: repeat(3,1fr); }
+  }
+  @media (max-width: 500px) {
+    header { padding: 12px 16px; }
+    header h1 { font-size: 1.1rem; }
+    .bg-cards { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Modal usuario -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div style="font-size:2rem;margin-bottom:12px">👤</div>
+    <h2>¿Cómo te llamás?</h2>
+    <p>Tu nombre quedará registrado en cada transacción que cargues.</p>
+    <input type="text" id="modalName" placeholder="Ingresá tu nombre completo" maxlength="40">
+    <button onclick="saveUser()">Ingresar</button>
+  </div>
+</div>
+
+<header>
+  <h1>📋 Caja Chica Estudio</h1>
+  <div class="header-right">
+    <div class="sync-status loading" id="syncStatus">⏳ Conectando...</div>
+    <div class="user-chip" onclick="changeUser()" title="Cambiar usuario">
+      👤 <span id="userLabel">...</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" id="tabMovimientos" onclick="showTab('movimientos')">Movimientos</div>
+    <div class="tab" id="tabReporte" onclick="showTab('reporte')">Reporte por Cliente</div>
+  </div>
+
+  <!-- ═══ TAB MOVIMIENTOS ═══ -->
+  <div id="sectionMovimientos">
+
+    <!-- Balances -->
+    <div class="balances">
+      <div class="balance-group">
+        <h3 class="caja">🔵 Caja</h3>
+        <div class="bg-cards">
+          <div class="mini-card">
+            <div class="lbl">Ingresos</div>
+            <div class="val income" id="bc-income">$0</div>
+          </div>
+          <div class="mini-card">
+            <div class="lbl">Gastos</div>
+            <div class="val expense" id="bc-expense">$0</div>
+          </div>
+          <div class="mini-card">
+            <div class="lbl">Balance</div>
+            <div class="val balance-caja" id="bc-balance">$0</div>
+          </div>
+        </div>
+      </div>
+      <div class="balance-group">
+        <h3 class="timbres">🟣 Timbres Profesionales</h3>
+        <div class="bg-cards">
+          <div class="mini-card">
+            <div class="lbl">Ingresos</div>
+            <div class="val income" id="bt-income">$0</div>
+          </div>
+          <div class="mini-card">
+            <div class="lbl">Gastos</div>
+            <div class="val expense" id="bt-expense">$0</div>
+          </div>
+          <div class="mini-card">
+            <div class="lbl">Balance</div>
+            <div class="val balance-timbres" id="bt-balance">$0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance Antel -->
+    <div class="balances" style="margin-top:0;margin-bottom:20px">
+      <div class="balance-group" style="grid-column:1/-1">
+        <h3 style="border-color:#dd6b20">📡 Factura de Antel</h3>
+        <div class="bg-cards" style="max-width:420px">
+          <div class="mini-card">
+            <div class="lbl">Ingresos</div>
+            <div class="val income" id="ba-income">$0</div>
+          </div>
+          <div class="mini-card">
+            <div class="lbl">Gastos</div>
+            <div class="val expense" id="ba-expense">$0</div>
+          </div>
+          <div class="mini-card">
+            <div class="lbl">Balance</div>
+            <div class="val" style="color:#dd6b20" id="ba-balance">$0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtro mes -->
+    <div class="month-bar">
+      <label>Periodo:</label>
+      <input type="month" id="monthFilter">
+      <button class="btn-all" id="btnAll" onclick="toggleAll()">Ver todo</button>
+    </div>
+
+    <div class="main">
+      <!-- Formulario -->
+      <div class="form-card">
+        <h2>Nueva Transaccion</h2>
+        <div class="type-toggle">
+          <div class="type-btn income active" id="btnIncome"  onclick="setType('income')">+ Ingreso</div>
+          <div class="type-btn expense"       id="btnExpense" onclick="setType('expense')">- Gasto</div>
+        </div>
+
+        <div class="form-group">
+          <label>Categoria <span class="req">*</span></label>
+          <select id="fCategory"><option value="">-- Seleccionar --</option></select>
+        </div>
+
+        <!-- Solo visible para gastos -->
+        <div class="form-group" id="sourceGroup" style="display:none">
+          <label>Descuenta de <span class="req">*</span></label>
+          <div class="source-toggle">
+            <div class="source-btn caja"    id="srcCaja"    onclick="setSource('caja')">🔵 Caja</div>
+            <div class="source-btn timbres" id="srcTimbres" onclick="setSource('timbres')">🟣 Timbres Prof.</div>
+            <div class="source-btn antel"   id="srcAntel"   onclick="setSource('antel')">📡 Antel</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Monto <span class="req">*</span></label>
+          <input type="number" id="fAmount" placeholder="0.00" min="0" step="0.01">
+        </div>
+
+        <!-- Solo visible para gastos -->
+        <div class="form-group" id="clienteGroup" style="display:none">
+          <label>Cliente <span class="req">*</span></label>
+          <input type="text" id="fCliente" placeholder="Nombre del cliente">
+        </div>
+
+        <div class="form-group">
+          <label>Fecha <span class="req">*</span></label>
+          <input type="date" id="fDate">
+        </div>
+
+        <div class="form-group">
+          <label>Descripcion / Nota</label>
+          <input type="text" id="fDesc" placeholder="Descripcion adicional (opcional)">
+        </div>
+
+        <button class="btn-submit" id="btnSubmit" onclick="addTransaction()">Agregar</button>
+      </div>
+
+      <!-- Lista -->
+      <div class="list-card">
+        <div class="list-header">
+          <h2>Transacciones</h2>
+          <div class="filter-group">
+            <button class="filter-btn active" id="filterAll"    onclick="setFilter('all')">Todas</button>
+            <button class="filter-btn" id="filterIncome"  onclick="setFilter('income')">Ingresos</button>
+            <button class="filter-btn" id="filterExpense" onclick="setFilter('expense')">Gastos</button>
+            <button class="filter-btn" id="filterCaja"    onclick="setFilter('caja')">Caja</button>
+            <button class="filter-btn" id="filterTimbres" onclick="setFilter('timbres')">Timbres</button>
+          </div>
+        </div>
+        <div class="tx-list" id="txList">
+          <div class="empty-state"><div class="icon">⏳</div><p>Conectando...</p></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /sectionMovimientos -->
+
+  <!-- ═══ TAB REPORTE ═══ -->
+  <div id="sectionReporte" style="display:none">
+    <div class="report-header">
+      <div>
+        <h2>Gastos por Cliente</h2>
+        <p style="font-size:0.82rem;color:#718096;margin-top:4px">
+          Periodo: <span id="reportPeriodLabel">—</span>
+        </p>
+      </div>
+      <button class="btn-export" onclick="exportCSV()">⬇ Exportar CSV</button>
+    </div>
+
+    <!-- Filtros del reporte -->
+    <div style="background:white;border-radius:12px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:20px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
+
+      <!-- Rango de fechas -->
+      <div>
+        <div style="font-size:0.78rem;font-weight:600;color:#4a5568;margin-bottom:5px">Desde</div>
+        <input type="date" id="reportFrom" onchange="renderReport()"
+          style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.88rem;background:#f7fafc">
+      </div>
+      <div>
+        <div style="font-size:0.78rem;font-weight:600;color:#4a5568;margin-bottom:5px">Hasta</div>
+        <input type="date" id="reportTo" onchange="renderReport()"
+          style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.88rem;background:#f7fafc">
+      </div>
+      <button class="btn-all" id="btnReportAll" onclick="toggleReportAll()" style="margin-bottom:1px">Ver todo</button>
+
+      <!-- Separador -->
+      <div style="width:1px;background:#e2e8f0;align-self:stretch;margin:0 4px"></div>
+
+      <!-- Filtro fuente -->
+      <div>
+        <div style="font-size:0.78rem;font-weight:600;color:#4a5568;margin-bottom:5px">Fuente</div>
+        <select id="reportFuente" onchange="renderReport()"
+          style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.88rem;background:#f7fafc">
+          <option value="">— Todas —</option>
+          <option value="caja">🔵 Caja</option>
+          <option value="timbres">🟣 Timbres Profesionales</option>
+          <option value="antel">📡 Factura de Antel</option>
+        </select>
+      </div>
+
+      <!-- Separador -->
+      <div style="width:1px;background:#e2e8f0;align-self:stretch;margin:0 4px"></div>
+
+      <!-- Filtro cliente -->
+      <div style="flex:1;min-width:180px">
+        <div style="font-size:0.78rem;font-weight:600;color:#4a5568;margin-bottom:5px">Cliente</div>
+        <select id="reportCliente" onchange="renderReport()"
+          style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.88rem;background:#f7fafc">
+          <option value="">— Todos los clientes —</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="report-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Categoria</th>
+            <th style="text-align:center">Fuente</th>
+            <th>Usuario</th>
+            <th>Descripcion</th>
+            <th style="text-align:right">Monto</th>
+          </tr>
+        </thead>
+        <tbody id="reportBody"></tbody>
+        <tfoot id="reportFoot"></tfoot>
+      </table>
+    </div>
+  </div><!-- /sectionReporte -->
+
+</div><!-- /container -->
+
+<!-- Modal edición -->
+<div class="modal-overlay hidden" id="editModalOverlay">
+  <div class="modal" style="width:420px;text-align:left">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h2 style="font-size:1rem">✏️ Editar transaccion</h2>
+      <button onclick="closeEditModal()" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:#718096;width:auto;padding:0">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Categoria <span class="req">*</span></label>
+      <select id="eCat"></select>
+    </div>
+    <div class="form-group" id="eSourceGroup">
+      <label>Descuenta de <span class="req">*</span></label>
+      <div class="source-toggle">
+        <div class="source-btn caja"    id="eSrcCaja"    onclick="setEditSource('caja')">🔵 Caja</div>
+        <div class="source-btn timbres" id="eSrcTimbres" onclick="setEditSource('timbres')">🟣 Timbres Prof.</div>
+        <div class="source-btn antel"   id="eSrcAntel"   onclick="setEditSource('antel')">📡 Antel</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Monto <span class="req">*</span></label>
+      <input type="number" id="eAmount" min="0" step="0.01">
+    </div>
+    <div class="form-group" id="eClienteGroup">
+      <label>Cliente <span class="req">*</span></label>
+      <input type="text" id="eCliente">
+    </div>
+    <div class="form-group">
+      <label>Fecha <span class="req">*</span></label>
+      <input type="date" id="eDate">
+    </div>
+    <div class="form-group">
+      <label>Descripcion / Nota</label>
+      <input type="text" id="eDesc">
+    </div>
+    <button class="btn-submit" id="btnEditSave" onclick="saveEdit()">Guardar cambios</button>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+// ── Firebase ─────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyA2Am70-SuYVmx_hGCF0LyZF_cPOwsXCms",
+  authDomain:        "finanzas-hogar-765b0.firebaseapp.com",
+  databaseURL:       "https://finanzas-hogar-765b0-default-rtdb.firebaseio.com",
+  projectId:         "finanzas-hogar-765b0",
+  storageBucket:     "finanzas-hogar-765b0.firebasestorage.app",
+  messagingSenderId: "666385499586",
+  appId:             "1:666385499586:web:e98ac19a96b78c0afac25b"
+};
+firebase.initializeApp(firebaseConfig);
+const db  = firebase.database();
+const ref = db.ref('cajachica'); // nodo separado de la app de finanzas del hogar
+
+// ── Categorias ───────────────────────────────────────────────
+const CATEGORIES = {
+  income: [
+    { id: 'caja',     label: 'Caja',                  icon: '💵' },
+    { id: 'timbres',  label: 'Timbres Profesionales',  icon: '🔖' },
+    { id: 'antel',    label: 'Factura de Antel',        icon: '📡' },
+  ],
+  expense: [
+    { id: 'timbres_prof',   label: 'Timbres Profesionales',  icon: '🔖' },
+    { id: 'actas',          label: 'Pasar Actas a Libros',   icon: '📚' },
+    { id: 'timbres_ain',    label: 'Timbres AIN',            icon: '🏷️' },
+    { id: 'locomocion',     label: 'Locomocion',             icon: '🚗' },
+    { id: 'visita_empresa', label: 'Visita a Empresas',      icon: '🏢' },
+    { id: 'timbres_bps',    label: 'Timbres BPS',            icon: '📌' },
+    { id: 'timbres_dj',     label: 'Timbres por DJ Anual',   icon: '📋' },
+    { id: 'libro_mtss',     label: 'Libro del MTSS',         icon: '📖' },
+    { id: 'encomienda',     label: 'Encomienda Nacional',    icon: '📦' },
+    { id: 'courrier',       label: 'Courrier Internacional', icon: '✈️' },
+    { id: 'otros',          label: 'Otros',                  icon: '➕' },
+  ]
+};
+
+// ── Estado ───────────────────────────────────────────────────
+let transactions  = {};
+let currentType   = 'income';
+let currentSource = 'caja';
+let currentFilter = 'all';
+let showAll       = false;
+let showReportAll = false;
+let currentUser   = localStorage.getItem('cajachica_user') || '';
+
+// ── Usuario ──────────────────────────────────────────────────
+function initUser() {
+  if (!currentUser) {
+    document.getElementById('modalOverlay').classList.remove('hidden');
+    setTimeout(() => document.getElementById('modalName').focus(), 100);
+  } else {
+    document.getElementById('userLabel').textContent = currentUser;
+  }
+}
+function saveUser() {
+  const name = document.getElementById('modalName').value.trim();
+  if (!name) return alert('Ingresá tu nombre.');
+  currentUser = name;
+  localStorage.setItem('cajachica_user', name);
+  document.getElementById('userLabel').textContent = name;
+  document.getElementById('modalOverlay').classList.add('hidden');
+}
+function changeUser() {
+  document.getElementById('modalName').value = currentUser;
+  document.getElementById('modalOverlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('modalName').focus(), 100);
+}
+document.getElementById('modalName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveUser();
+});
+
+// ── Firebase listener ────────────────────────────────────────
+ref.on('value', snapshot => {
+  transactions = snapshot.val() || {};
+  setSync('ok', '🟢 Sincronizado');
+  // Solo renderiza la pestaña activa para no bloquear el hilo
+  const tabActiva = document.getElementById('sectionReporte').style.display === 'none' ? 'movimientos' : 'reporte';
+  if (tabActiva === 'movimientos') {
+    render();
+  } else {
+    renderReport();
+  }
+}, err => {
+  setSync('error', '🔴 Sin conexion');
+  console.error(err);
+});
+function setSync(state, msg) {
+  const el = document.getElementById('syncStatus');
+  el.className = 'sync-status ' + state;
+  el.textContent = msg;
+}
+
+// ── Tipo y fuente ─────────────────────────────────────────────
+function setType(type) {
+  currentType = type;
+  document.getElementById('btnIncome').className  = 'type-btn income'  + (type === 'income'  ? ' active' : '');
+  document.getElementById('btnExpense').className = 'type-btn expense' + (type === 'expense' ? ' active' : '');
+  document.getElementById('sourceGroup').style.display  = type === 'expense' ? 'block' : 'none';
+  document.getElementById('clienteGroup').style.display = type === 'expense' ? 'block' : 'none';
+  updateCategoryOptions();
+}
+function setSource(src) {
+  currentSource = src;
+  document.getElementById('srcCaja').className    = 'source-btn caja'    + (src === 'caja'    ? ' active' : '');
+  document.getElementById('srcTimbres').className = 'source-btn timbres' + (src === 'timbres' ? ' active' : '');
+  document.getElementById('srcAntel').className   = 'source-btn antel'   + (src === 'antel'   ? ' active' : '');
+}
+function updateCategoryOptions() {
+  const sel = document.getElementById('fCategory');
+  sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+  CATEGORIES[currentType].forEach(c => {
+    sel.innerHTML += `<option value="${c.id}">${c.icon} ${c.label}</option>`;
+  });
+}
+
+// ── Filtros lista ─────────────────────────────────────────────
+function setFilter(f) {
+  currentFilter = f;
+  ['all','income','expense','caja','timbres'].forEach(x => {
+    const id = 'filter' + x.charAt(0).toUpperCase() + x.slice(1);
+    document.getElementById(id).className = 'filter-btn' + (f === x ? ' active' : '');
+  });
+  render();
+}
+function toggleAll() {
+  showAll = !showAll;
+  const btn = document.getElementById('btnAll');
+  btn.className   = 'btn-all' + (showAll ? ' active' : '');
+  btn.textContent = showAll ? 'Ver mes actual' : 'Ver todo';
+  render();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('sectionMovimientos').style.display = tab === 'movimientos' ? '' : 'none';
+  document.getElementById('sectionReporte').style.display     = tab === 'reporte'     ? '' : 'none';
+  document.getElementById('tabMovimientos').className = 'tab' + (tab === 'movimientos' ? ' active' : '');
+  document.getElementById('tabReporte').className     = 'tab' + (tab === 'reporte'     ? ' active' : '');
+  if (tab === 'reporte') renderReport();
+}
+
+// ── Agregar transaccion ───────────────────────────────────────
+function addTransaction() {
+  const cat    = document.getElementById('fCategory').value;
+  const amount = parseFloat(document.getElementById('fAmount').value);
+  const date   = document.getElementById('fDate').value;
+  const desc   = document.getElementById('fDesc').value.trim();
+  const cliente = currentType === 'expense' ? document.getElementById('fCliente').value.trim() : '';
+
+  if (!cat)               return alert('Seleccioná una categoria.');
+  if (!amount || amount <= 0) return alert('Ingresá un monto valido.');
+  if (currentType === 'expense' && !cliente) return alert('El campo Cliente es obligatorio.');
+  if (!date)              return alert('Seleccioná una fecha.');
+  if (!currentUser)       return alert('Debés ingresar tu nombre primero.');
+
+  // Para ingreso: la fuente es la misma categoria (caja o timbres)
+  // Para gasto: la fuente es lo que se seleccionó en "Descuenta de"
+  const source = currentType === 'income' ? cat : currentSource;
+
+  const btn = document.getElementById('btnSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  ref.push().set({
+    type: currentType,
+    cat, amount, date, desc, cliente, source,
+    user: currentUser,
+    ts: Date.now()
+  })
+  .then(() => {
+    document.getElementById('fCategory').value = '';
+    document.getElementById('fAmount').value   = '';
+    document.getElementById('fCliente').value  = '';
+    document.getElementById('fDesc').value     = '';
+  })
+  .catch(err => alert('Error al guardar: ' + err.message))
+  .finally(() => { btn.disabled = false; btn.textContent = 'Agregar'; });
+}
+
+// ── Eliminar ─────────────────────────────────────────────────
+function deleteTransaction(id) {
+  const t = transactions[id];
+  if (t && t.user !== currentUser) return alert('Solo podés eliminar tus propias transacciones.');
+  if (!confirm('¿Eliminar esta transaccion?')) return;
+  ref.child(id).remove().catch(err => alert('Error: ' + err.message));
+}
+
+// ── Editar ────────────────────────────────────────────────────
+let editingId   = null;
+let editingType = null;
+let editSource  = 'caja';
+
+function openEditModal(id) {
+  const t = transactions[id];
+  if (!t) return;
+  if (t.user !== currentUser) return alert('Solo podés editar tus propias transacciones.');
+
+  editingId   = id;
+  editingType = t.type;
+  editSource  = t.source;
+
+  // Poblar categorias
+  const sel = document.getElementById('eCat');
+  sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+  CATEGORIES[t.type].forEach(c => {
+    sel.innerHTML += `<option value="${c.id}" ${c.id === t.cat ? 'selected' : ''}>${c.icon} ${c.label}</option>`;
+  });
+
+  // Mostrar/ocultar campos segun tipo
+  document.getElementById('eSourceGroup').style.display  = t.type === 'expense' ? 'block' : 'none';
+  document.getElementById('eClienteGroup').style.display = t.type === 'expense' ? 'block' : 'none';
+
+  // Fuente
+  setEditSource(t.source);
+
+  // Valores
+  document.getElementById('eAmount').value  = t.amount;
+  document.getElementById('eCliente').value = t.cliente || '';
+  document.getElementById('eDate').value    = t.date;
+  document.getElementById('eDesc').value    = t.desc || '';
+
+  document.getElementById('editModalOverlay').classList.remove('hidden');
+}
+
+function closeEditModal() {
+  editingId = null;
+  document.getElementById('editModalOverlay').classList.add('hidden');
+}
+
+function setEditSource(src) {
+  editSource = src;
+  document.getElementById('eSrcCaja').className    = 'source-btn caja'    + (src === 'caja'    ? ' active' : '');
+  document.getElementById('eSrcTimbres').className = 'source-btn timbres' + (src === 'timbres' ? ' active' : '');
+  document.getElementById('eSrcAntel').className   = 'source-btn antel'   + (src === 'antel'   ? ' active' : '');
+}
+
+function saveEdit() {
+  if (!editingId) return;
+  const t = transactions[editingId];
+  if (!t || t.user !== currentUser) return alert('No tenés permiso para editar esta transaccion.');
+
+  const cat     = document.getElementById('eCat').value;
+  const amount  = parseFloat(document.getElementById('eAmount').value);
+  const date    = document.getElementById('eDate').value;
+  const desc    = document.getElementById('eDesc').value.trim();
+  const cliente = editingType === 'expense' ? document.getElementById('eCliente').value.trim() : '';
+
+  if (!cat)              return alert('Seleccioná una categoria.');
+  if (!amount || amount <= 0) return alert('Ingresá un monto valido.');
+  if (editingType === 'expense' && !cliente) return alert('El campo Cliente es obligatorio.');
+  if (!date)             return alert('Seleccioná una fecha.');
+
+  const source = editingType === 'income' ? cat : editSource;
+
+  const btn = document.getElementById('btnEditSave');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  ref.child(editingId).update({ cat, amount, date, desc, cliente, source })
+    .then(() => closeEditModal())
+    .catch(err => alert('Error al guardar: ' + err.message))
+    .finally(() => { btn.disabled = false; btn.textContent = 'Guardar cambios'; });
+}
+
+// Cerrar modal con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeEditModal();
+});
+
+// ── Helpers ──────────────────────────────────────────────────
+function fmt(n) {
+  return '$' + Number(n).toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function getCat(type, id) {
+  return (CATEGORIES[type] || []).find(c => c.id === id) || { label: id, icon: '?' };
+}
+function getMonth() { return document.getElementById('monthFilter').value; }
+
+// ── Render principal ─────────────────────────────────────────
+function render() {
+  const month = getMonth();
+  const scope = Object.values(transactions).filter(t => showAll || !month || t.date.startsWith(month));
+
+  // Balances por fuente
+  const bcIncome  = scope.filter(t => t.type === 'income'  && t.source === 'caja').reduce((s,t) => s + t.amount, 0);
+  const bcExpense = scope.filter(t => t.type === 'expense' && t.source === 'caja').reduce((s,t) => s + t.amount, 0);
+  const btIncome  = scope.filter(t => t.type === 'income'  && t.source === 'timbres').reduce((s,t) => s + t.amount, 0);
+  const btExpense = scope.filter(t => t.type === 'expense' && t.source === 'timbres').reduce((s,t) => s + t.amount, 0);
+  const baIncome  = scope.filter(t => t.type === 'income'  && t.source === 'antel').reduce((s,t) => s + t.amount, 0);
+  const baExpense = scope.filter(t => t.type === 'expense' && t.source === 'antel').reduce((s,t) => s + t.amount, 0);
+
+  document.getElementById('bc-income').textContent  = fmt(bcIncome);
+  document.getElementById('bc-expense').textContent = fmt(bcExpense);
+  document.getElementById('bc-balance').textContent = fmt(bcIncome - bcExpense);
+  document.getElementById('bt-income').textContent  = fmt(btIncome);
+  document.getElementById('bt-expense').textContent = fmt(btExpense);
+  document.getElementById('bt-balance').textContent = fmt(btIncome - btExpense);
+  document.getElementById('ba-income').textContent  = fmt(baIncome);
+  document.getElementById('ba-expense').textContent = fmt(baExpense);
+  document.getElementById('ba-balance').textContent = fmt(baIncome - baExpense);
+
+  // Lista filtrada
+  let list = Object.entries(transactions)
+    .map(([id, t]) => ({ id, ...t }))
+    .filter(t => showAll || !month || t.date.startsWith(month))
+    .filter(t => {
+      if (currentFilter === 'income')  return t.type === 'income';
+      if (currentFilter === 'expense') return t.type === 'expense';
+      if (currentFilter === 'caja')    return t.source === 'caja';
+      if (currentFilter === 'timbres') return t.source === 'timbres';
+      return true;
+    })
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  const container = document.getElementById('txList');
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No hay transacciones para este periodo.</p></div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(t => {
+    const cat = getCat(t.type, t.cat);
+    const d   = new Date(t.date + 'T00:00:00');
+    const dateStr = d.toLocaleDateString('es-UY', { day: '2-digit', month: 'short', year: 'numeric' });
+    const sourceLabel = t.source === 'caja' ? 'Caja' : t.source === 'timbres' ? 'Timbres Prof.' : 'Antel';
+    const sourceClass = t.source === 'caja' ? 'caja' : t.source === 'timbres' ? 'timbres' : 'antel';
+    const clienteLine = t.cliente ? `<span class="cliente">${t.cliente}</span> &bull; ` : '';
+    const descLine    = t.desc ? ` &bull; ${t.desc}` : '';
+
+    return `
+    <div class="tx-item">
+      <div class="tx-icon ${t.type}">${cat.icon}</div>
+      <div class="tx-info">
+        <div class="tx-desc">${cat.label}</div>
+        <div class="tx-meta">
+          ${clienteLine}${dateStr}${descLine}
+          <span class="source-tag ${sourceClass}">${sourceLabel}</span>
+        </div>
+      </div>
+      <div class="tx-right">
+        <div class="tx-amount ${t.type}">${t.type === 'income' ? '+' : '-'}${fmt(t.amount)}</div>
+        <div class="tx-user">👤 ${t.user || '—'}</div>
+      </div>
+      ${t.user === currentUser ? `
+        <button class="tx-action tx-edit"   onclick="openEditModal('${t.id}')" title="Editar">✏️</button>
+        <button class="tx-action tx-delete" onclick="deleteTransaction('${t.id}')" title="Eliminar">✕</button>
+      ` : '<div style="width:56px"></div>'}
+    </div>`;
+  }).join('');
+}
+
+// ── Reporte por cliente ───────────────────────────────────────
+function toggleReportAll() {
+  showReportAll = !showReportAll;
+  const btn = document.getElementById('btnReportAll');
+  btn.className   = 'btn-all' + (showReportAll ? ' active' : '');
+  btn.textContent = showReportAll ? 'Ver mes actual' : 'Ver todo';
+  if (showReportAll) {
+    document.getElementById('reportFrom').value = '';
+    document.getElementById('reportTo').value   = '';
+  } else {
+    const today = new Date().toISOString().slice(0, 7);
+    const firstDay = today + '-01';
+    const lastDay  = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
+    document.getElementById('reportFrom').value = firstDay;
+    document.getElementById('reportTo').value   = lastDay;
+  }
+  renderReport();
+}
+
+function updateClienteSelect(expenses) {
+  const sel = document.getElementById('reportCliente');
+  const current = sel.value;
+  const clientes = [...new Set(expenses.map(t => t.cliente || '(Sin cliente)'))].sort();
+  sel.innerHTML = '<option value="">— Todos los clientes —</option>';
+  clientes.forEach(c => {
+    sel.innerHTML += `<option value="${c}" ${c === current ? 'selected' : ''}>${c}</option>`;
+  });
+}
+
+function getReportExpenses() {
+  const from    = document.getElementById('reportFrom').value;
+  const to      = document.getElementById('reportTo').value;
+  const cliente = document.getElementById('reportCliente').value;
+  const fuente  = document.getElementById('reportFuente').value;
+
+  return Object.values(transactions)
+    .filter(t => t.type === 'expense')
+    .filter(t => {
+      if (showReportAll) return true;
+      if (from && t.date < from) return false;
+      if (to   && t.date > to)   return false;
+      return true;
+    })
+    .filter(t => !cliente || (t.cliente || '(Sin cliente)') === cliente)
+    .filter(t => !fuente  || t.source === fuente);
+}
+
+function renderReport() {
+  const from    = document.getElementById('reportFrom').value;
+  const to      = document.getElementById('reportTo').value;
+  const cliente = document.getElementById('reportCliente').value;
+
+  // Label de periodo
+  let label = 'Todos los periodos';
+  if (!showReportAll) {
+    if (from && to)   label = `${from} al ${to}`;
+    else if (from)    label = `Desde ${from}`;
+    else if (to)      label = `Hasta ${to}`;
+    else              label = '—';
+  }
+  const fuente = document.getElementById('reportFuente').value;
+  const fuenteLabel = fuente === 'caja' ? '🔵 Caja' : fuente === 'timbres' ? '🟣 Timbres' : fuente === 'antel' ? '📡 Antel' : '';
+  document.getElementById('reportPeriodLabel').textContent =
+    label + (fuenteLabel ? ` · ${fuenteLabel}` : '') + (cliente ? ` · Cliente: ${cliente}` : '');
+
+  // Primero actualizo el select con TODOS los gastos del periodo (sin filtro cliente)
+  const allPeriod = Object.values(transactions)
+    .filter(t => t.type === 'expense')
+    .filter(t => {
+      if (showReportAll) return true;
+      if (from && t.date < from) return false;
+      if (to   && t.date > to)   return false;
+      return true;
+    });
+  updateClienteSelect(allPeriod);
+
+  const expenses = getReportExpenses();
+  const tbody = document.getElementById('reportBody');
+  const tfoot = document.getElementById('reportFoot');
+
+  if (expenses.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="no-report">No hay gastos para los filtros seleccionados.</td></tr>`;
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  const rows = expenses.sort((a, b) => a.date.localeCompare(b.date) || (a.cliente||'').localeCompare(b.cliente||''));
+  const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
+
+  tbody.innerHTML = rows.map(t => {
+    const cat      = getCat('expense', t.cat);
+    const srcLabel = t.source === 'caja' ? '🔵 Caja' : t.source === 'timbres' ? '🟣 Timbres' : '📡 Antel';
+    const d        = new Date(t.date + 'T00:00:00');
+    const dateStr  = d.toLocaleDateString('es-UY', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return `
+    <tr>
+      <td style="white-space:nowrap">${dateStr}</td>
+      <td><strong>${t.cliente || '(Sin cliente)'}</strong></td>
+      <td>${cat.icon} ${cat.label}</td>
+      <td style="text-align:center">${srcLabel}</td>
+      <td style="color:#718096;font-size:0.82rem">${t.user || '—'}</td>
+      <td style="color:#718096;font-size:0.82rem">${t.desc || ''}</td>
+      <td class="td-amount">${fmt(t.amount)}</td>
+    </tr>`;
+  }).join('');
+
+  tfoot.innerHTML = `
+    <tr>
+      <td colspan="6">TOTAL (${rows.length} movimiento${rows.length !== 1 ? 's' : ''})</td>
+      <td class="td-amount">${fmt(grandTotal)}</td>
+    </tr>`;
+}
+
+// ── Exportar CSV ──────────────────────────────────────────────
+function exportCSV() {
+  const from = document.getElementById('reportFrom').value;
+  const to   = document.getElementById('reportTo').value;
+  const expenses = getReportExpenses().sort((a, b) => a.date.localeCompare(b.date));
+
+  if (expenses.length === 0) return alert('No hay datos para exportar.');
+
+  const header = ['Fecha','Cliente','Categoria','Fuente','Monto','Usuario','Descripcion'];
+  const rows = expenses.map(t => {
+    const cat = getCat('expense', t.cat);
+    return [
+      t.date,
+      t.cliente || '',
+      cat.label,
+      t.source === 'caja' ? 'Caja' : t.source === 'timbres' ? 'Timbres Profesionales' : 'Factura de Antel',
+      t.amount,
+      t.user || '',
+      t.desc || ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+
+  const csv = [header.join(','), ...rows].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  const suffix = from && to ? `${from}_${to}` : (from || to || 'completo');
+  a.download = `reporte-cajachica-${suffix}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  const ym    = today.toISOString().slice(0, 7);
+  document.getElementById('monthFilter').value = ym;
+  document.getElementById('fDate').value       = today.toISOString().slice(0, 10);
+
+  // Reporte: desde el 1ro del mes actual hasta hoy
+  const firstDay = ym + '-01';
+  const lastDay  = today.toISOString().slice(0, 10);
+  document.getElementById('reportFrom').value = firstDay;
+  document.getElementById('reportTo').value   = lastDay;
+
+  document.getElementById('monthFilter').addEventListener('change', render);
+
+  // Fuente por defecto
+  setSource('caja');
+  updateCategoryOptions();
+  initUser();
+});
+</script>
+</body>
+</html>
