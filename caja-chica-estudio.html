@@ -30,6 +30,22 @@
     border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
   }
   .modal button:hover { background: #3a5a8f; }
+  .modal button:disabled { background: #a0aec0; cursor: default; }
+  .modal .link-btn {
+    width: auto; background: none; color: #4a6fa5; font-size: 0.8rem;
+    padding: 8px 0 0; text-decoration: underline; font-weight: 500;
+  }
+  .modal .link-btn:hover { background: none; color: #2d4a7a; }
+  .modal .error {
+    background: #fed7d7; color: #822727; border-radius: 8px;
+    padding: 9px 12px; font-size: 0.82rem; margin-bottom: 14px; text-align: left;
+  }
+  .modal .aviso-ok {
+    background: #c6f6d5; color: #22543d; border-radius: 8px;
+    padding: 9px 12px; font-size: 0.82rem; margin-bottom: 14px; text-align: left;
+  }
+  .modal .campo { text-align: left; margin-bottom: 4px; font-size: 0.78rem; color: #718096; font-weight: 600; }
+  #appBody.bloqueado { display: none; }
 
   /* ── Header ── */
   header {
@@ -242,23 +258,34 @@
 </head>
 <body>
 
-<!-- Modal usuario -->
-<div class="modal-overlay" id="modalOverlay">
+<!-- Pantalla de acceso -->
+<div class="modal-overlay" id="loginOverlay">
   <div class="modal">
-    <div style="font-size:2rem;margin-bottom:12px">👤</div>
-    <h2>¿Cómo te llamás?</h2>
-    <p>Tu nombre quedará registrado en cada transacción que cargues.</p>
-    <input type="text" id="modalName" placeholder="Ingresá tu nombre completo" maxlength="40">
-    <button onclick="saveUser()">Ingresar</button>
+    <div style="font-size:2rem;margin-bottom:12px">🔒</div>
+    <h2>Caja Chica Estudio</h2>
+    <p>Ingresá con tu usuario del estudio.</p>
+    <div class="error" id="loginError" style="display:none"></div>
+    <div class="aviso-ok" id="loginAviso" style="display:none"></div>
+    <div class="campo">Correo</div>
+    <input type="email" id="loginEmail" placeholder="nombre@estudiogg.com.uy" autocomplete="username">
+    <div class="campo">Contraseña</div>
+    <input type="password" id="loginPass" placeholder="Tu contraseña" autocomplete="current-password">
+    <button id="btnLogin" onclick="iniciarSesion()">Entrar</button>
+    <button class="link-btn" onclick="recuperarPass()">Olvidé mi contraseña</button>
   </div>
 </div>
+
+<div id="appBody" class="bloqueado">
 
 <header>
   <h1>📋 Caja Chica Estudio</h1>
   <div class="header-right">
     <div class="sync-status loading" id="syncStatus">⏳ Conectando...</div>
-    <div class="user-chip" onclick="changeUser()" title="Cambiar usuario">
-      👤 <span id="userLabel">...</span>
+    <div class="user-chip" onclick="descargarRespaldo()" title="Descargar una copia completa de todos los movimientos">
+      💾 Respaldo
+    </div>
+    <div class="user-chip" onclick="cerrarSesion()" title="Cerrar sesión">
+      👤 <span id="userLabel">...</span> · Salir
     </div>
   </div>
 </header>
@@ -524,8 +551,11 @@
   </div>
 </div>
 
+</div><!-- /appBody -->
+
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
 <script>
@@ -540,8 +570,24 @@ const firebaseConfig = {
   appId:             "1:748385055792:web:5a91714334e753a684a9f5"
 };
 firebase.initializeApp(firebaseConfig);
-const db  = firebase.database();
-const ref = db.ref('cajachica'); // nodo separado de la app de finanzas del hogar
+const auth = firebase.auth();
+const db   = firebase.database();
+const ref  = db.ref('cajachica'); // nodo separado de la app de finanzas del hogar
+
+// Nombre a mostrar por usuario, y los nombres con los que quedaron firmados
+// los movimientos cargados ANTES de que existiera el login. Los alias sirven
+// para que cada uno siga pudiendo editar sus movimientos viejos.
+const USUARIOS = {
+  "psuarez@estudiogg.com.uy":   { nombre: "Priscila", alias: ["Priscila"] },
+  "jmaguilar@estudiogg.com.uy": { nombre: "Juanma",   alias: ["Juan Manuel", "Juanma"] },
+  "mgamio@estudiogg.com.uy":    { nombre: "Maite",    alias: ["Maite Gamio", "Maite"] },
+  "abauter@estudiogg.com.uy":   { nombre: "Amparo",   alias: ["Amparo"] },
+  "lgimenez@estudiogg.com.uy":  { nombre: "Luis",     alias: ["Luis", "Luis Gimenez"] },
+};
+// Estos usuarios pueden editar y borrar movimientos de cualquiera.
+const ADMINS = [
+  "lgimenez@estudiogg.com.uy",
+];
 
 // ── Categorias ───────────────────────────────────────────────
 const CATEGORIES = {
@@ -572,49 +618,153 @@ let currentSource = 'caja';
 let currentFilter = 'all';
 let showAll       = false;
 let showReportAll = false;
-let currentUser   = localStorage.getItem('cajachica_user') || '';
+let currentUser   = '';
+let currentEmail  = '';
+let currentUid    = '';
+let esAdmin       = false;
+let currentAlias  = [];
+let syncIniciado  = false;
 
-// ── Usuario ──────────────────────────────────────────────────
-function initUser() {
-  if (!currentUser) {
-    document.getElementById('modalOverlay').classList.remove('hidden');
-    setTimeout(() => document.getElementById('modalName').focus(), 100);
-  } else {
-    document.getElementById('userLabel').textContent = currentUser;
+// ── Autenticacion ────────────────────────────────────────────
+function nombreDe(email) {
+  const u = USUARIOS[(email || '').toLowerCase()];
+  if (u) return u.nombre;
+  const local = (email || '').toLowerCase().split('@')[0].replace(/[._-]+/g, ' ');
+  return local.replace(/\b\w/g, c => c.toUpperCase());
+}
+function aliasDe(email) {
+  const u = USUARIOS[(email || '').toLowerCase()];
+  return u ? u.alias : [nombreDe(email)];
+}
+function loginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+  if (msg) document.getElementById('loginAviso').style.display = 'none';
+}
+function loginAviso(msg) {
+  const el = document.getElementById('loginAviso');
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+  if (msg) document.getElementById('loginError').style.display = 'none';
+}
+function mensajeAuth(code) {
+  switch (code) {
+    case 'auth/invalid-email':        return 'El correo no tiene un formato valido.';
+    case 'auth/user-disabled':        return 'Ese usuario esta deshabilitado. Hablá con Luis.';
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':   return 'Correo o contraseña incorrectos.';
+    case 'auth/too-many-requests':    return 'Demasiados intentos. Esperá unos minutos.';
+    case 'auth/network-request-failed': return 'Sin conexion a internet.';
+    default:                          return 'No se pudo entrar. Probá de nuevo.';
   }
 }
-function saveUser() {
-  const name = document.getElementById('modalName').value.trim();
-  if (!name) return alert('Ingresá tu nombre.');
-  currentUser = name;
-  localStorage.setItem('cajachica_user', name);
-  document.getElementById('userLabel').textContent = name;
-  document.getElementById('modalOverlay').classList.add('hidden');
+function iniciarSesion() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  if (!email || !pass) return loginError('Completá correo y contraseña.');
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  loginError('');
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch(err => loginError(mensajeAuth(err.code)))
+    .finally(() => { btn.disabled = false; btn.textContent = 'Entrar'; });
 }
-function changeUser() {
-  document.getElementById('modalName').value = currentUser;
-  document.getElementById('modalOverlay').classList.remove('hidden');
-  setTimeout(() => document.getElementById('modalName').focus(), 100);
+function recuperarPass() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) return loginError('Escribí tu correo arriba y volvé a tocar el enlace.');
+  auth.sendPasswordResetEmail(email)
+    .then(() => loginAviso('Te mandamos un correo para restablecer la contraseña.'))
+    .catch(err => loginError(mensajeAuth(err.code)));
 }
-document.getElementById('modalName').addEventListener('keydown', e => {
-  if (e.key === 'Enter') saveUser();
+function cerrarSesion() {
+  if (!confirm('¿Cerrar sesion?')) return;
+  auth.signOut();
+}
+['loginEmail','loginPass'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') iniciarSesion();
+  });
 });
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentEmail = (user.email || '').toLowerCase();
+    currentUid   = user.uid;
+    currentUser  = nombreDe(currentEmail);
+    currentAlias = aliasDe(currentEmail);
+    esAdmin      = ADMINS.map(a => a.toLowerCase()).includes(currentEmail);
+    document.getElementById('userLabel').textContent = currentUser;
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('appBody').classList.remove('bloqueado');
+    document.getElementById('loginPass').value = '';
+    arrancarSync();
+  } else {
+    currentEmail = ''; currentUid = ''; currentUser = ''; esAdmin = false; currentAlias = [];
+    if (syncIniciado) { ref.off(); syncIniciado = false; }
+    transactions = {};
+    document.getElementById('appBody').classList.add('bloqueado');
+    document.getElementById('loginOverlay').classList.remove('hidden');
+    setTimeout(() => document.getElementById('loginEmail').focus(), 100);
+  }
+});
+
+// ── Permisos ─────────────────────────────────────────────────
+function puedeTocar(t) {
+  if (!t) return false;
+  if (esAdmin) return true;
+  if (t.uid) return t.uid === currentUid;
+  return currentAlias.includes(t.user);   // movimientos viejos, anteriores al login
+}
 
 // ── Firebase listener ────────────────────────────────────────
-ref.on('value', snapshot => {
-  transactions = snapshot.val() || {};
-  setSync('ok', '🟢 Sincronizado');
-  // Solo renderiza la pestaña activa para no bloquear el hilo
-  const tabActiva = document.getElementById('sectionReporte').style.display === 'none' ? 'movimientos' : 'reporte';
-  if (tabActiva === 'movimientos') {
-    render();
-  } else {
-    renderReport();
-  }
-}, err => {
-  setSync('error', '🔴 Sin conexion');
-  console.error(err);
-});
+function arrancarSync() {
+  if (syncIniciado) return;
+  syncIniciado = true;
+  ref.on('value', snapshot => {
+    transactions = snapshot.val() || {};
+    setSync('ok', '🟢 Sincronizado');
+    // Solo renderiza la pestaña activa para no bloquear el hilo
+    const tabActiva = document.getElementById('sectionReporte').style.display === 'none' ? 'movimientos' : 'reporte';
+    if (tabActiva === 'movimientos') {
+      render();
+    } else {
+      renderReport();
+    }
+  }, err => {
+    setSync('error', '🔴 Sin conexion');
+    console.error(err);
+  });
+}
+
+// ── Respaldo ─────────────────────────────────────────────────
+function descargarRespaldo() {
+  const total = Object.keys(transactions).length;
+  if (!total) return alert('Todavia no hay movimientos para respaldar.');
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const json = JSON.stringify({ cajachica: transactions }, null, 2);
+  bajarArchivo(json, 'application/json', `caja-chica-respaldo-${hoy}.json`);
+
+  const cols = ['id','date','type','source','cat','amount','cliente','desc','user','createdAt'];
+  const esc  = v => {
+    const s = v === undefined || v === null ? '' : String(v);
+    return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const filas = Object.entries(transactions)
+    .sort((a, b) => (a[1].date || '').localeCompare(b[1].date || ''))
+    .map(([id, t]) => cols.map(c => esc(c === 'id' ? id : t[c])).join(';'));
+  const csv = '﻿' + cols.join(';') + '\n' + filas.join('\n');
+  bajarArchivo(csv, 'text/csv;charset=utf-8', `caja-chica-respaldo-${hoy}.csv`);
+
+  alert(`Respaldo descargado: ${total} movimientos.\nSe bajaron dos archivos, uno .json y uno .csv para abrir en Excel.`);
+}
+function bajarArchivo(contenido, tipo, nombre) {
+  const url = URL.createObjectURL(new Blob([contenido], { type: tipo }));
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
 function setSync(state, msg) {
   const el = document.getElementById('syncStatus');
   el.className = 'sync-status ' + state;
@@ -682,7 +832,7 @@ function addTransaction() {
   if (!amount || amount <= 0) return alert('Ingresá un monto valido.');
   if (currentType === 'expense' && !cliente) return alert('El campo Cliente es obligatorio.');
   if (!date)              return alert('Seleccioná una fecha.');
-  if (!currentUser)       return alert('Debés ingresar tu nombre primero.');
+  if (!currentUser)       return alert('Tenés que iniciar sesion primero.');
 
   // Para ingreso: la fuente es la misma categoria (caja o timbres)
   // Para gasto: la fuente es lo que se seleccionó en "Descuenta de"
@@ -696,6 +846,8 @@ function addTransaction() {
     type: currentType,
     cat, amount, date, desc, cliente, source,
     user: currentUser,
+    uid:  currentUid,
+    email: currentEmail,
     ts: Date.now()
   })
   .then(() => {
@@ -711,7 +863,7 @@ function addTransaction() {
 // ── Eliminar ─────────────────────────────────────────────────
 function deleteTransaction(id) {
   const t = transactions[id];
-  if (t && t.user !== currentUser) return alert('Solo podés eliminar tus propias transacciones.');
+  if (t && !puedeTocar(t)) return alert('Solo podés eliminar tus propias transacciones.');
   if (!confirm('¿Eliminar esta transaccion?')) return;
   ref.child(id).remove().catch(err => alert('Error: ' + err.message));
 }
@@ -724,7 +876,7 @@ let editSource  = 'caja';
 function openEditModal(id) {
   const t = transactions[id];
   if (!t) return;
-  if (t.user !== currentUser) return alert('Solo podés editar tus propias transacciones.');
+  if (!puedeTocar(t)) return alert('Solo podés editar tus propias transacciones.');
 
   editingId   = id;
   editingType = t.type;
@@ -768,7 +920,7 @@ function setEditSource(src) {
 function saveEdit() {
   if (!editingId) return;
   const t = transactions[editingId];
-  if (!t || t.user !== currentUser) return alert('No tenés permiso para editar esta transaccion.');
+  if (!t || !puedeTocar(t)) return alert('No tenés permiso para editar esta transaccion.');
 
   const cat     = document.getElementById('eCat').value;
   const amount  = parseFloat(document.getElementById('eAmount').value);
@@ -1044,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fuente por defecto
   setSource('caja');
   updateCategoryOptions();
-  initUser();
+  // el arranque real lo dispara auth.onAuthStateChanged
 });
 </script>
 </body>
